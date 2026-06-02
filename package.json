@@ -1,0 +1,16 @@
+{
+  "name": "rag-data-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "dev": "corepack pnpm --filter @rag-data-toolkit/web dev",
+    "build": "corepack pnpm -r build",
+    "typecheck": "corepack pnpm -r typecheck",
+    "cli": "corepack pnpm --filter @rag-data-toolkit/core build && corepack pnpm --filter @rag-data-toolkit/cli start"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

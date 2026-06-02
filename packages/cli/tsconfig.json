@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@rag-data-toolkit/core": ["../core/src/index.ts"]
+    },
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "../core" }]
+}
