@@ -13,6 +13,7 @@ import { ToolSidebar } from "./components/ToolSidebar.js";
 import { useFilePreview } from "./hooks/useFilePreview.js";
 
 const OUTPUT_PREVIEW_CHARS = 20000;
+const OUTPUT_PREVIEW_ITEMS = 10;
 
 interface ResultPreview {
   text: string;
@@ -75,12 +76,18 @@ function resultToPreview(result?: ToolResult): ResultPreview {
   }
 
   let text: string;
+  let note = "";
 
   if (result.text !== undefined) {
     text = result.text;
   } else {
     const data = result.documents ?? result.data;
-    text = JSON.stringify(data ?? null, null, 2) ?? "";
+    const previewData = Array.isArray(data) ? data.slice(0, OUTPUT_PREVIEW_ITEMS) : data;
+    text = JSON.stringify(previewData ?? null, null, 2) ?? "";
+
+    if (Array.isArray(data) && data.length > OUTPUT_PREVIEW_ITEMS) {
+      note = `JSON limite aux ${OUTPUT_PREVIEW_ITEMS} premiers elements sur ${data.length}.`;
+    }
   }
 
   const truncated = text.length > OUTPUT_PREVIEW_CHARS;
@@ -88,7 +95,9 @@ function resultToPreview(result?: ToolResult): ResultPreview {
   return {
     text: truncated ? text.slice(0, OUTPUT_PREVIEW_CHARS) : text,
     truncated,
-    note: truncated ? `Sortie formatee limitee a ${OUTPUT_PREVIEW_CHARS.toLocaleString("fr-FR")} caracteres.` : ""
+    note: [note, truncated ? `Sortie formatee limitee a ${OUTPUT_PREVIEW_CHARS.toLocaleString("fr-FR")} caracteres.` : ""]
+      .filter(Boolean)
+      .join(" ")
   };
 }
 

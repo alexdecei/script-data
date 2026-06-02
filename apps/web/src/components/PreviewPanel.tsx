@@ -1,5 +1,5 @@
-import type { DiagnosticReport, ToolResult } from "@rag-data-toolkit/core";
-import type { FilePreviewState } from "../hooks/useFilePreview.js";
+import type { DiagnosticReport, RedactionFinding, ToolResult } from "@rag-data-toolkit/core";
+import type { FilePreviewState, PreviewTable } from "../hooks/useFilePreview.js";
 
 interface PreviewState {
   text: string;
@@ -27,13 +27,25 @@ function DiagnosticsView({ diagnostics }: { diagnostics?: DiagnosticReport }) {
     ["Documents", diagnostics.documentCount ?? "-"],
     ["Champs vides", diagnostics.emptyFieldCount ?? "-"],
     ["Corrections encodage", diagnostics.encodingFixCount ?? "-"],
+    ["Secrets censures", diagnostics.redactionCounts?.secret ?? 0],
+    ["Certificats censures", diagnostics.redactionCounts?.certificate ?? 0],
+    ["IP censurees", diagnostics.redactionCounts?.ip ?? 0],
+    ["Chemins censures", diagnostics.redactionCounts?.internalPath ?? 0],
+    ["Images base64 retirees", diagnostics.removedBase64Images ?? 0],
+    ["Articles inactifs exclus", diagnostics.excludedInactiveArticles ?? 0],
+    ["Articles vides exclus", diagnostics.excludedEmptyArticles ?? 0],
+    ["Pages menu detectees", diagnostics.detectedMenuPages ?? 0],
+    ["Pages menu exclues", diagnostics.excludedMenuPages ?? 0],
+    ["Articles surtout liens", diagnostics.articlesWithMostlyLinks ?? 0],
+    ["Liens internes moyens", diagnostics.averageInternalLinksPerArticle ?? 0],
+    ["Articles exportes", diagnostics.exportedArticles ?? 0],
     ["Tokens estimes", diagnostics.estimatedTokens ?? "-"]
   ];
 
   return (
     <div className="diagnostics">
       {rows.map(([label, value]) => (
-        <div key={label}>
+        <div className="diagnostic-row" key={label}>
           <span>{label}</span>
           <strong>{value}</strong>
         </div>
@@ -45,6 +57,37 @@ function DiagnosticsView({ diagnostics }: { diagnostics?: DiagnosticReport }) {
           ))}
         </ul>
       )}
+      {diagnostics.redactionFindings && diagnostics.redactionFindings.length > 0 && (
+        <RedactionFindingsList findings={diagnostics.redactionFindings} />
+      )}
+    </div>
+  );
+}
+
+const findingLabels: Record<RedactionFinding["type"], string> = {
+  secret: "Secret",
+  certificate: "Certificat",
+  ip: "IP",
+  internalPath: "Chemin interne"
+};
+
+function RedactionFindingsList({ findings }: { findings: RedactionFinding[] }) {
+  return (
+    <div className="redaction-findings">
+      <h3>Elements detectes pour censure</h3>
+      <div className="finding-list">
+        {findings.slice(0, 100).map((finding, index) => (
+          <label className="finding-item" key={`${finding.type}-${finding.fieldPath ?? "text"}-${index}`}>
+            <input defaultChecked type="checkbox" />
+            <span className="finding-content">
+              <strong>{findingLabels[finding.type]}</strong>
+              {finding.fieldPath ? <em>{finding.fieldPath}</em> : null}
+              <code>{finding.preview}</code>
+            </span>
+          </label>
+        ))}
+      </div>
+      {findings.length > 100 && <p className="preview-note">Liste limitee aux 100 premieres detections.</p>}
     </div>
   );
 }
@@ -69,6 +112,31 @@ function FormattedPreview({
   );
 }
 
+function TablePreview({ table }: { table: PreviewTable }) {
+  return (
+    <div className="table-preview-wrap">
+      <table className="preview-table">
+        <thead>
+          <tr>
+            {table.headers.map((header) => (
+              <th key={header}>{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td key={`${rowIndex}-${cellIndex}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function PreviewPanel({
   inputPreview,
   inputPreviewError,
@@ -85,6 +153,16 @@ export function PreviewPanel({
         </div>
         {inputPreviewError ? (
           <p className="error-text">{inputPreviewError}</p>
+        ) : inputPreview.table ? (
+          <>
+            {(inputPreview.truncated || inputPreview.note) && (
+              <p className="preview-note">
+                {inputPreview.truncated ? "Apercu tronque pour proteger les performances. " : ""}
+                {inputPreview.note}
+              </p>
+            )}
+            <TablePreview table={inputPreview.table} />
+          </>
         ) : (
           <FormattedPreview emptyText="Aucun apercu." preview={inputPreview} />
         )}

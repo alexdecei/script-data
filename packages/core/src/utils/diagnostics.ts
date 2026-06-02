@@ -1,4 +1,5 @@
-import type { DiagnosticReport, RagDocument } from "../types.js";
+import type { DiagnosticReport, RagDocument, RedactionCounts, RedactionFinding } from "../types.js";
+import { cloneEmptyRedactionCounts } from "./redact-sensitive.js";
 
 export function estimateTokens(text: string): number {
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -45,6 +46,22 @@ export interface DiagnosticInput {
   data?: unknown;
   text?: string;
   encodingFixCount?: number;
+  redactionCounts?: RedactionCounts;
+  redactionFindings?: RedactionFinding[];
+  removedBase64Images?: number;
+  excludedEmptyArticles?: number;
+  excludedInactiveArticles?: number;
+  excludedMenuPages?: number;
+  detectedMenuPages?: number;
+  averageInternalLinksPerArticle?: number;
+  articlesWithMostlyLinks?: number;
+  exportedArticles?: number;
+  totalItems?: number;
+  qualifiedItems?: number;
+  failedItems?: number;
+  durationMs?: number;
+  averageMsPerItem?: number;
+  errors?: string[];
   warnings?: string[];
 }
 
@@ -59,6 +76,22 @@ export function createDiagnostics(input: DiagnosticInput): DiagnosticReport {
     warnings: input.warnings ?? [],
     emptyFieldCount: countEmptyFields(input.data ?? input.documents ?? input.text),
     encodingFixCount: input.encodingFixCount ?? 0,
+    redactionCounts: input.redactionCounts ?? cloneEmptyRedactionCounts(),
+    redactionFindings: input.redactionFindings ?? [],
+    removedBase64Images: input.removedBase64Images ?? 0,
+    excludedEmptyArticles: input.excludedEmptyArticles ?? 0,
+    excludedInactiveArticles: input.excludedInactiveArticles ?? 0,
+    excludedMenuPages: input.excludedMenuPages ?? 0,
+    detectedMenuPages: input.detectedMenuPages ?? 0,
+    averageInternalLinksPerArticle: input.averageInternalLinksPerArticle ?? 0,
+    articlesWithMostlyLinks: input.articlesWithMostlyLinks ?? 0,
+    exportedArticles: input.exportedArticles ?? 0,
+    totalItems: input.totalItems ?? 0,
+    qualifiedItems: input.qualifiedItems ?? 0,
+    failedItems: input.failedItems ?? 0,
+    durationMs: input.durationMs ?? 0,
+    averageMsPerItem: input.averageMsPerItem ?? 0,
+    errors: input.errors ?? [],
     estimatedTokens: estimateTokens(textForTokens)
   };
 

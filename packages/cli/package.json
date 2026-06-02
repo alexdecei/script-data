@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@rag-data-toolkit/core": "workspace:*"
+    "@rag-data-toolkit/core": "workspace:*",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

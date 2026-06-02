@@ -35,8 +35,40 @@ export interface DiagnosticReport {
   documentCount?: number;
   emptyFieldCount?: number;
   encodingFixCount?: number;
+  redactionCounts?: RedactionCounts;
+  redactionFindings?: RedactionFinding[];
+  removedBase64Images?: number;
+  excludedEmptyArticles?: number;
+  excludedInactiveArticles?: number;
+  excludedMenuPages?: number;
+  detectedMenuPages?: number;
+  averageInternalLinksPerArticle?: number;
+  articlesWithMostlyLinks?: number;
+  exportedArticles?: number;
+  totalItems?: number;
+  qualifiedItems?: number;
+  failedItems?: number;
+  durationMs?: number;
+  averageMsPerItem?: number;
+  errors?: string[];
   estimatedTokens?: number;
   warnings: string[];
+}
+
+export interface RedactionCounts {
+  secret: number;
+  certificate: number;
+  ip: number;
+  internalPath: number;
+}
+
+export type RedactionType = keyof RedactionCounts;
+
+export interface RedactionFinding {
+  type: RedactionType;
+  fieldPath?: string;
+  placeholder: string;
+  preview: string;
 }
 
 export interface ToolResult {
@@ -53,8 +85,24 @@ export interface ToolConfig {
   fixEncoding?: boolean;
   stripHtml?: boolean;
   stripControlChars?: boolean;
+  removeBase64Images?: boolean;
+  redactSensitive?: boolean;
+  redactSecrets?: boolean;
+  redactCertificates?: boolean;
+  redactIps?: boolean;
+  redactInternalPaths?: boolean;
   excludedFields?: string[];
   fieldRenames?: Record<string, string>;
+  includeInactive?: boolean;
+  minBodyLength?: number;
+  includeMenuPages?: boolean;
+  includeMenuPagesInCanonical?: boolean;
+  enableOpenAIQualification?: boolean;
+  concurrency?: number;
+  maxRetries?: number;
+  contentField?: string;
+  titleField?: string;
+  categoryField?: string;
 }
 
 export interface ToolModule {

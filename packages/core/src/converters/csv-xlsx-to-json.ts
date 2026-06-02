@@ -1,7 +1,8 @@
-import type { ToolInputFile, ToolModule } from "../types.js";
+import type { RedactionFinding, ToolInputFile, ToolModule } from "../types.js";
 import { toUint8Array } from "../utils/binary.js";
 import { createDiagnostics } from "../utils/diagnostics.js";
 import { normalizeKeys } from "../utils/normalize-key.js";
+import { cloneEmptyRedactionCounts, mergeRedactionCounts } from "../utils/redact-sensitive.js";
 import {
   documentsToJsonl,
   recordToRagDocument,
@@ -85,16 +86,28 @@ export const csvXlsxToJsonTool: ToolModule = {
     normalizeWhitespace: true,
     fixEncoding: true,
     stripHtml: false,
-    stripControlChars: true
+    stripControlChars: true,
+    removeBase64Images: true,
+    redactSensitive: true,
+    redactSecrets: true,
+    redactCertificates: true,
+    redactIps: true,
+    redactInternalPaths: true
   },
   async run(input, config) {
     const file = requireInputFile(input.files);
     const rows = await readFirstWorksheet(file);
     const records = rowsToRecords(rows);
     let encodingFixCount = 0;
+    let removedBase64Images = 0;
+    const redactionCounts = cloneEmptyRedactionCounts();
+    const redactionFindings: RedactionFinding[] = [];
     const cleanedRecords = records.map((record) => {
       const result = transformRecord(record, config);
       encodingFixCount += result.encodingFixCount;
+      removedBase64Images += result.removedBase64Images;
+      mergeRedactionCounts(redactionCounts, result.redactionCounts);
+      redactionFindings.push(...result.redactionFindings);
       return result.record;
     });
     const warnings: string[] = [];
@@ -122,6 +135,9 @@ export const csvXlsxToJsonTool: ToolModule = {
           rowCount: cleanedRecords.length,
           documents,
           encodingFixCount,
+          redactionCounts,
+          redactionFindings,
+          removedBase64Images,
           warnings
         })
       };
@@ -134,6 +150,9 @@ export const csvXlsxToJsonTool: ToolModule = {
         rowCount: cleanedRecords.length,
         data: cleanedRecords,
         encodingFixCount,
+        redactionCounts,
+        redactionFindings,
+        removedBase64Images,
         warnings
       })
     };

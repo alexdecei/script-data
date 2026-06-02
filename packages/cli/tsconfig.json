@@ -7,7 +7,8 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "@rag-data-toolkit/core": ["../core/src/index.ts"]
+      "@rag-data-toolkit/core": ["../core/src/index.ts"],
+      "@rag-data-toolkit/core/node": ["../core/src/node.ts"]
     },
     "types": ["node"]
   },

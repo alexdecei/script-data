@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { config as loadDotEnv } from "dotenv";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
@@ -8,6 +9,7 @@ import {
   type ToolInput,
   type ToolResult
 } from "@rag-data-toolkit/core";
+import { getNodeToolById } from "@rag-data-toolkit/core/node";
 
 interface CliArgs {
   command?: string;
@@ -17,10 +19,21 @@ interface CliArgs {
   mode?: OutputMode;
   excludedFields?: string[];
   fieldRenames?: Record<string, string>;
+  concurrency?: number;
+  maxRetries?: number;
+  contentField?: string;
+  titleField?: string;
+  categoryField?: string;
+  enableOpenAIQualification?: boolean;
   help?: boolean;
 }
 
 const outputModes = new Set<OutputMode>(["canonical", "document", "rag", "jsonl"]);
+
+function loadEnvironment(): void {
+  loadDotEnv();
+  loadDotEnv({ path: resolve(process.env.INIT_CWD ?? process.cwd(), ".env") });
+}
 
 function printHelp(): void {
   console.log(`RAG Data Toolkit CLI
@@ -28,6 +41,7 @@ function printHelp(): void {
 Usage:
   pnpm cli convert --tool csv-xlsx-to-json --input ./input.xlsx --output ./output.json --mode canonical
   pnpm cli process --tool json-cleaner --input ./input.json --output ./clean.json --mode rag
+  pnpm cli process --tool openai-json-qualifier --input ./clean.json --output ./qualified.json
   pnpm cli convert --tool pdf-to-markdown --input ./doc.pdf --output ./doc.md --mode document
 
 Options:
@@ -37,6 +51,12 @@ Options:
   --mode       canonical | document | rag | jsonl
   --exclude    Comma-separated fields to remove
   --rename     Comma-separated renames, e.g. old:new,title:name
+  --concurrency       OpenAI qualifier concurrency, default 5
+  --retries           OpenAI qualifier retries, default 2
+  --content-field     Content field for OpenAI qualifier, default body_markdown
+  --title-field       Title field for OpenAI qualifier, default title
+  --category-field    Category field for OpenAI qualifier, default categorie
+  --enable-openai-qualification true|false
 `);
 }
 
@@ -112,10 +132,46 @@ function parseArgs(argv: string[]): CliArgs {
         .filter(Boolean);
     } else if (key === "rename") {
       args.fieldRenames = parseRenames(value);
+    } else if (key === "concurrency") {
+      args.concurrency = parseIntegerOption(key, value);
+    } else if (key === "retries") {
+      args.maxRetries = parseIntegerOption(key, value);
+    } else if (key === "content-field") {
+      args.contentField = value;
+    } else if (key === "title-field") {
+      args.titleField = value;
+    } else if (key === "category-field") {
+      args.categoryField = value;
+    } else if (key === "enable-openai-qualification") {
+      args.enableOpenAIQualification = parseBooleanOption(key, value);
     }
   }
 
   return args;
+}
+
+function parseBooleanOption(key: string, value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+
+  if (["true", "1", "yes", "oui"].includes(normalized)) {
+    return true;
+  }
+
+  if (["false", "0", "no", "non"].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error(`Invalid boolean for --${key}: ${value}`);
+}
+
+function parseIntegerOption(key: string, value: string): number {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Invalid integer for --${key}: ${value}`);
+  }
+
+  return parsed;
 }
 
 function getExtension(fileName: string): string {
@@ -136,6 +192,7 @@ function serializeResult(result: ToolResult): string {
 }
 
 async function main(): Promise<void> {
+  loadEnvironment();
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help || !args.command) {
@@ -148,7 +205,7 @@ async function main(): Promise<void> {
     throw new Error("--tool, --input and --output are required.");
   }
 
-  const tool = getToolById(args.tool);
+  const tool = getNodeToolById(args.tool) ?? getToolById(args.tool);
 
   if (!tool) {
     throw new Error(`Unknown tool: ${args.tool}`);
@@ -177,7 +234,13 @@ async function main(): Promise<void> {
     ...tool.defaultConfig,
     outputMode: args.mode ?? tool.defaultConfig.outputMode,
     excludedFields: args.excludedFields,
-    fieldRenames: args.fieldRenames
+    fieldRenames: args.fieldRenames,
+    concurrency: args.concurrency ?? tool.defaultConfig.concurrency,
+    maxRetries: args.maxRetries ?? tool.defaultConfig.maxRetries,
+    contentField: args.contentField ?? tool.defaultConfig.contentField,
+    titleField: args.titleField ?? tool.defaultConfig.titleField,
+    categoryField: args.categoryField ?? tool.defaultConfig.categoryField,
+    enableOpenAIQualification: args.enableOpenAIQualification ?? tool.defaultConfig.enableOpenAIQualification
   };
   const result = await tool.run(input, config);
   const serialized = serializeResult(result);

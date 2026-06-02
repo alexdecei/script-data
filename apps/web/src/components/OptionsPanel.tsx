@@ -20,14 +20,18 @@ type BooleanConfigOption =
   | "normalizeWhitespace"
   | "fixEncoding"
   | "stripHtml"
-  | "stripControlChars";
+  | "stripControlChars"
+  | "removeBase64Images"
+  | "redactSensitive";
 
 const toggleOptions: BooleanConfigOption[] = [
   "removeEmptyFields",
   "normalizeWhitespace",
   "fixEncoding",
   "stripHtml",
-  "stripControlChars"
+  "stripControlChars",
+  "removeBase64Images",
+  "redactSensitive"
 ];
 
 const optionLabels: Record<BooleanConfigOption, string> = {
@@ -35,7 +39,9 @@ const optionLabels: Record<BooleanConfigOption, string> = {
   normalizeWhitespace: "Normaliser espaces",
   fixEncoding: "Corriger encodage",
   stripHtml: "Nettoyer HTML",
-  stripControlChars: "Retirer controles"
+  stripControlChars: "Retirer controles",
+  removeBase64Images: "Retirer images base64",
+  redactSensitive: "Censure"
 };
 
 export function OptionsPanel({
@@ -117,6 +123,75 @@ export function OptionsPanel({
           ))}
         </div>
       </section>
+
+      {(config.includeInactive !== undefined ||
+        config.minBodyLength !== undefined ||
+        config.includeMenuPages !== undefined ||
+        config.includeMenuPagesInCanonical !== undefined) && (
+        <section className="control-section two-col">
+          {config.includeInactive !== undefined && (
+            <label className="toggle">
+              <input
+                checked={Boolean(config.includeInactive)}
+                onChange={(event) =>
+                  onConfigChange({
+                    ...config,
+                    includeInactive: event.currentTarget.checked
+                  })
+                }
+                type="checkbox"
+              />
+              <span>Inclure inactifs</span>
+            </label>
+          )}
+          {config.includeMenuPages !== undefined && (
+            <label className="toggle">
+              <input
+                checked={Boolean(config.includeMenuPages)}
+                onChange={(event) =>
+                  onConfigChange({
+                    ...config,
+                    includeMenuPages: event.currentTarget.checked
+                  })
+                }
+                type="checkbox"
+              />
+              <span>Inclure pages menu en RAG</span>
+            </label>
+          )}
+          {config.includeMenuPagesInCanonical !== undefined && (
+            <label className="toggle">
+              <input
+                checked={Boolean(config.includeMenuPagesInCanonical)}
+                onChange={(event) =>
+                  onConfigChange({
+                    ...config,
+                    includeMenuPagesInCanonical: event.currentTarget.checked
+                  })
+                }
+                type="checkbox"
+              />
+              <span>Inclure pages menu en canonical</span>
+            </label>
+          )}
+          {config.minBodyLength !== undefined && (
+            <label className="field">
+              <span>Longueur minimale du contenu</span>
+              <input
+                min={0}
+                onChange={(event) =>
+                  onConfigChange({
+                    ...config,
+                    minBodyLength: Number(event.currentTarget.value)
+                  })
+                }
+                type="number"
+                value={config.minBodyLength}
+              />
+            </label>
+          )}
+        </section>
+      )}
 
       <section className="control-section two-col">
         <label className="field">
