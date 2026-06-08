@@ -75,6 +75,7 @@ export interface ToolResult {
   data?: unknown;
   text?: string;
   documents?: RagDocument[];
+  report?: unknown;
   diagnostics: DiagnosticReport;
 }
 
@@ -103,6 +104,12 @@ export interface ToolConfig {
   contentField?: string;
   titleField?: string;
   categoryField?: string;
+  minScore?: number;
+  onlyRagCandidates?: boolean;
+  keepAuthor?: boolean;
+  keepClient?: boolean;
+  redactClient?: boolean;
+  pretty?: boolean;
 }
 
 export interface ToolModule {

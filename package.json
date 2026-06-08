@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "dev": "corepack pnpm --filter @rag-data-toolkit/web dev",
+    "start": "corepack pnpm --filter @rag-data-toolkit/cli start",
     "build": "corepack pnpm -r build",
     "typecheck": "corepack pnpm --filter @rag-data-toolkit/core build && corepack pnpm -r typecheck",
     "cli": "corepack pnpm --filter @rag-data-toolkit/core build && corepack pnpm --filter @rag-data-toolkit/cli start"

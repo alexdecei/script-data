@@ -16,6 +16,7 @@ interface CliArgs {
   tool?: string;
   input?: string;
   output?: string;
+  report?: string;
   mode?: OutputMode;
   excludedFields?: string[];
   fieldRenames?: Record<string, string>;
@@ -25,6 +26,12 @@ interface CliArgs {
   titleField?: string;
   categoryField?: string;
   enableOpenAIQualification?: boolean;
+  minScore?: number;
+  onlyRagCandidates?: boolean;
+  keepAuthor?: boolean;
+  keepClient?: boolean;
+  redactClient?: boolean;
+  pretty?: boolean;
   help?: boolean;
 }
 
@@ -43,11 +50,13 @@ Usage:
   pnpm cli process --tool json-cleaner --input ./input.json --output ./clean.json --mode rag
   pnpm cli process --tool openai-json-qualifier --input ./clean.json --output ./qualified.json
   pnpm cli convert --tool pdf-to-markdown --input ./doc.pdf --output ./doc.md --mode document
+  pnpm start -- clean-tickets --input ./tickets.json --output ./tickets.cleaned.json --report ./tickets.report.json
 
 Options:
   --tool       Tool id from the registry
   --input      Local input file
   --output     Local output file
+  --report     Optional report output file for clean-tickets
   --mode       canonical | document | rag | jsonl
   --exclude    Comma-separated fields to remove
   --rename     Comma-separated renames, e.g. old:new,title:name
@@ -57,6 +66,12 @@ Options:
   --title-field       Title field for OpenAI qualifier, default title
   --category-field    Category field for OpenAI qualifier, default categorie
   --enable-openai-qualification true|false
+  --min-score          Minimum support ticket score, default 0
+  --only-rag-candidates true|false
+  --keep-author        true|false, default false
+  --keep-client        true|false, default true
+  --redact-client      true|false, default false
+  --pretty             true|false, default true
 `);
 }
 
@@ -83,7 +98,12 @@ function parseRenames(value: string | undefined): Record<string, string> | undef
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
+  let normalizedArgv = argv;
+
+  while (normalizedArgv[0] === "--") {
+    normalizedArgv = normalizedArgv.slice(1);
+  }
+
   const [command, ...tokens] = normalizedArgv;
   const args: CliArgs = { command };
 
@@ -104,14 +124,22 @@ function parseArgs(argv: string[]): CliArgs {
       continue;
     }
 
-    const key = token.slice(2);
-    const value = tokens[index + 1];
+    let key = token.slice(2);
+    let value = tokens[index + 1];
+    const equalsIndex = key.indexOf("=");
+
+    if (equalsIndex !== -1) {
+      value = key.slice(equalsIndex + 1);
+      key = key.slice(0, equalsIndex);
+    }
 
     if (!value || value.startsWith("--")) {
       throw new Error(`Missing value for --${key}`);
     }
 
-    index += 1;
+    if (equalsIndex === -1) {
+      index += 1;
+    }
 
     if (key === "tool") {
       args.tool = value;
@@ -119,6 +147,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.input = value;
     } else if (key === "output") {
       args.output = value;
+    } else if (key === "report") {
+      args.report = value;
     } else if (key === "mode") {
       if (!outputModes.has(value as OutputMode)) {
         throw new Error(`Unsupported output mode: ${value}`);
@@ -144,6 +174,18 @@ function parseArgs(argv: string[]): CliArgs {
       args.categoryField = value;
     } else if (key === "enable-openai-qualification") {
       args.enableOpenAIQualification = parseBooleanOption(key, value);
+    } else if (key === "min-score") {
+      args.minScore = parseNumberOption(key, value);
+    } else if (key === "only-rag-candidates") {
+      args.onlyRagCandidates = parseBooleanOption(key, value);
+    } else if (key === "keep-author") {
+      args.keepAuthor = parseBooleanOption(key, value);
+    } else if (key === "keep-client") {
+      args.keepClient = parseBooleanOption(key, value);
+    } else if (key === "redact-client") {
+      args.redactClient = parseBooleanOption(key, value);
+    } else if (key === "pretty") {
+      args.pretty = parseBooleanOption(key, value);
     }
   }
 
@@ -174,21 +216,33 @@ function parseIntegerOption(key: string, value: string): number {
   return parsed;
 }
 
+function parseNumberOption(key: string, value: string): number {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid number for --${key}: ${value}`);
+  }
+
+  return parsed;
+}
+
 function getExtension(fileName: string): string {
   const lastDot = fileName.lastIndexOf(".");
   return lastDot === -1 ? "" : fileName.slice(lastDot + 1).toLowerCase();
 }
 
-function serializeResult(result: ToolResult): string {
+function serializeResult(result: ToolResult, pretty: boolean): string {
   if (result.text !== undefined) {
     return result.text;
   }
 
+  const spacing = pretty ? 2 : 0;
+
   if (result.documents) {
-    return JSON.stringify(result.documents, null, 2);
+    return JSON.stringify(result.documents, null, spacing);
   }
 
-  return JSON.stringify(result.data ?? null, null, 2);
+  return JSON.stringify(result.data ?? null, null, spacing);
 }
 
 async function main(): Promise<void> {
@@ -198,6 +252,11 @@ async function main(): Promise<void> {
   if (args.help || !args.command) {
     printHelp();
     return;
+  }
+
+  if (args.command === "clean-tickets") {
+    args.tool = "support-ticket-cleaner";
+    args.mode = "canonical";
   }
 
   if (!args.tool || !args.input || !args.output) {
@@ -214,6 +273,7 @@ async function main(): Promise<void> {
   const callerCwd = process.env.INIT_CWD ?? process.cwd();
   const inputPath = resolve(callerCwd, args.input);
   const outputPath = resolve(callerCwd, args.output);
+  const reportPath = args.report ? resolve(callerCwd, args.report) : undefined;
   const buffer = await readFile(inputPath);
   const extension = getExtension(inputPath);
   const input: ToolInput = {
@@ -240,15 +300,29 @@ async function main(): Promise<void> {
     contentField: args.contentField ?? tool.defaultConfig.contentField,
     titleField: args.titleField ?? tool.defaultConfig.titleField,
     categoryField: args.categoryField ?? tool.defaultConfig.categoryField,
-    enableOpenAIQualification: args.enableOpenAIQualification ?? tool.defaultConfig.enableOpenAIQualification
+    enableOpenAIQualification: args.enableOpenAIQualification ?? tool.defaultConfig.enableOpenAIQualification,
+    minScore: args.minScore ?? tool.defaultConfig.minScore,
+    onlyRagCandidates: args.onlyRagCandidates ?? tool.defaultConfig.onlyRagCandidates,
+    keepAuthor: args.keepAuthor ?? tool.defaultConfig.keepAuthor,
+    keepClient: args.keepClient ?? tool.defaultConfig.keepClient,
+    redactClient: args.redactClient ?? tool.defaultConfig.redactClient,
+    pretty: args.pretty ?? tool.defaultConfig.pretty
   };
   const result = await tool.run(input, config);
-  const serialized = serializeResult(result);
+  const pretty = config.pretty !== false;
+  const serialized = serializeResult(result, pretty);
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, serialized, "utf8");
 
   console.log(`Wrote ${outputPath}`);
+
+  if (reportPath) {
+    await mkdir(dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, JSON.stringify(result.report ?? result.diagnostics, null, pretty ? 2 : 0), "utf8");
+    console.log(`Wrote ${reportPath}`);
+  }
+
   console.log(JSON.stringify(result.diagnostics, null, 2));
 }
 
